@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class UpdateManager {
   final BuildContext context;
@@ -8,42 +10,30 @@ class UpdateManager {
   // we would normally point this to the raw content of that file on the server.
   // For this example to work in a real scenario, this URL must be the hosted path of version.json.
   final String versionCheckUrl =
-      "https://raw.githubusercontent.com/aariznazirwani/masjidnoor/main/version.json";
+      "https://raw.githubusercontent.com/aariznazirwani/masjidnoor/refs/heads/main/version.json";
 
   UpdateManager(this.context);
 
   Future<void> checkForUpdates() async {
     try {
-      // In a real app, you would fetch from the remote server.
-      // Since we just created the local file, we can't 'fetch' it via HTTP unless it is hosted.
-      // However, the request implies setting up the architecture.
+      final response = await http.get(Uri.parse(versionCheckUrl));
 
-      // To simulate reading the local file for testing purposes if you were running a server:
-      // final response = await http.get(Uri.parse(versionCheckUrl));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> versionData = json.decode(response.body);
 
-      // For now, I will simulate the response based on the file we created.
-      // In production, uncomment the http call and remove this map.
-      final Map<String, dynamic> versionData = {
-        "latestVersion": "1.0.0", // Change this to test update logic
-        "isMandatory": true,
-        "updateUrl": "https://github.com/aariznazirwani/masjidnoor",
-      };
+        final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        final String currentVersion = packageInfo.version;
+        final String latestVersion = versionData['latestVersion'];
+        final bool isMandatory = versionData['isMandatory'];
+        final String updateUrl = versionData['updateUrl'];
 
-      // Real implementation would be:
-      // final response = await http.get(Uri.parse(versionCheckUrl));
-      // if (response.statusCode != 200) return;
-      // final versionData = json.decode(response.body);
-
-      final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      final String currentVersion = packageInfo.version;
-      final String latestVersion = versionData['latestVersion'];
-      final bool isMandatory = versionData['isMandatory'];
-      final String updateUrl = versionData['updateUrl'];
-
-      if (_isUpdateAvailable(currentVersion, latestVersion)) {
-        if (context.mounted) {
-          _showUpdateDialog(isMandatory, updateUrl);
+        if (_isUpdateAvailable(currentVersion, latestVersion)) {
+          if (context.mounted) {
+            _showUpdateDialog(isMandatory, updateUrl);
+          }
         }
+      } else {
+        debugPrint("Failed to fetch version info: ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("Error checking for updates: $e");
