@@ -1,5 +1,5 @@
 {
-    "latestVersion": "1.0.0",
-    "isMandatory": true,
-    "updateUrl": "https://github.com/aariznazirwani/masjidnoor"
+    "latestVersion": "1.0.1",
+    "isMandatory": false,
+    "updateUrl": "https://github.com/aariznazirwani/masjidnoor/releases"
 }

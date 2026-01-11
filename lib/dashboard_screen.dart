@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:math';
 import 'admin_login_screen.dart';
+import 'update_manager.dart';
 import 'update_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -10,13 +13,59 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _tableKey = GlobalKey();
+  int _currentIndex = 0;
+
+  int _titleIndex = 0;
+  final List<String> _titles = ['Masjid Noor Bathar', 'مسجد نور بٹھار'];
+  Timer? _titleTimer;
+
   @override
   void initState() {
     super.initState();
+    _startTitleTimer();
     // Check for updates after the frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateManager(context).checkForUpdates();
     });
+  }
+
+  void _startTitleTimer() {
+    _titleTimer = Timer.periodic(const Duration(milliseconds: 3000), (timer) {
+      if (mounted) {
+        setState(() {
+          _titleIndex = (_titleIndex + 1) % _titles.length;
+        });
+      }
+    });
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+    if (index == 0) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    } else if (index == 1) {
+      if (_tableKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _tableKey.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -26,12 +75,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'Masjid Noor',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
+        title: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 600),
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            final rotateAnim = Tween(
+              begin: pi / 2,
+              end: 0.0,
+            ).animate(animation);
+            return AnimatedBuilder(
+              animation: rotateAnim,
+              child: child,
+              builder: (context, child) {
+                final isUnder = (ValueKey(_titles[_titleIndex]) != child?.key);
+                var tilt = ((animation.value - 0.5).abs() - 0.5) * 0.003;
+                tilt *= isUnder ? -1.0 : 1.0;
+                final value = isUnder
+                    ? min(rotateAnim.value, pi / 2)
+                    : rotateAnim.value;
+                return Transform(
+                  transform: Matrix4.rotationX(value)..setEntry(3, 1, tilt),
+                  alignment: Alignment.center,
+                  child: child,
+                );
+              },
+            );
+          },
+          child: Text(
+            _titles[_titleIndex],
+            key: ValueKey<String>(_titles[_titleIndex]),
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 24,
+            ),
           ),
         ),
         actions: [
@@ -55,6 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Expanded(
                   child: StatCard(
-                    title: 'TOTAL HOUSEHOLDS',
+                    title: 'TOTAL',
                     value: '120',
                     borderLeftColor: Colors.transparent,
                   ),
@@ -72,7 +149,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SizedBox(width: 12),
                 Expanded(
                   child: StatCard(
-                    title: 'PAID HOUSEHOLDS',
+                    title: 'PAID',
                     value: '85',
                     percentage: '70%',
                     percentageColor: Colors.green,
@@ -96,8 +173,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SizedBox(width: 12),
                 Expanded(
                   child: StatCard(
-                    title: 'SALARY FUND',
-                    value: '\$42.5k',
+                    title: 'TOTAL SALARY',
+                    value: '₹42.5k',
                     borderLeftColor: Colors.green,
                   ),
                 ),
@@ -125,7 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        '\$45,000',
+                        '₹45,000',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -133,6 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
+
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -151,55 +229,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 24),
 
-            // Search Bar
+            // Search Bar Removed
+
+            // Filter Options
             Row(
               children: [
                 Expanded(
                   child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: const TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search household or month...',
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 15,
-                        ),
-                      ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Filter by Month'),
+                        Icon(Icons.arrow_drop_down, color: Colors.grey),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.filter_list, color: Colors.black54),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // Recent Transactions Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Recent Transactions',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'View All',
-                    style: TextStyle(color: Colors.green),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Filter by Household'),
+                        Icon(Icons.arrow_drop_down, color: Colors.grey),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -209,130 +282,131 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // Transactions Table
             Container(
+              key: _tableKey,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(
+                            width: 50,
+                            child: Text(
+                              'S.No',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              'Month',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 200,
+                            child: Text(
+                              'Household',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 100,
+                            child: Text(
+                              'Salary',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: const Row(
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            'S.No',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 80,
-                          child: Text(
-                            'Month',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Household',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          'Salary',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                    // List Items
+                    const TransactionItem(
+                      sNo: '01',
+                      month: 'Oct 2023',
+                      household: 'House #42 (Ahmed)',
+                      amount: '₹500',
                     ),
-                  ),
-                  // List Items
-                  const TransactionItem(
-                    sNo: '01',
-                    month: 'Oct 2023',
-                    household: 'House #42 (Ahmed)',
-                    amount: '\$500',
-                  ),
-                  const TransactionItem(
-                    sNo: '02',
-                    month: 'Oct 2023',
-                    household: 'House #15 (Rahman)',
-                    amount: '\$250',
-                  ),
-                  const TransactionItem(
-                    sNo: '03',
-                    month: 'Sep 2023',
-                    household: 'House #08 (Khan)',
-                    amount: '\$100',
-                  ),
-                  const TransactionItem(
-                    sNo: '04',
-                    month: 'Sep 2023',
-                    household: 'House #33 (Ali)',
-                    amount: '\$500',
-                  ),
-                  const TransactionItem(
-                    sNo: '05',
-                    month: 'Aug 2023',
-                    household: 'House #99 (Yusuf)',
-                    amount: '\$100',
-                  ),
-                ],
+                    const TransactionItem(
+                      sNo: '02',
+                      month: 'Oct 2023',
+                      household: 'House #15 (Rahman)',
+                      amount: '₹250',
+                    ),
+                    const TransactionItem(
+                      sNo: '03',
+                      month: 'Sep 2023',
+                      household: 'House #08 (Khan)',
+                      amount: '₹100',
+                    ),
+                    const TransactionItem(
+                      sNo: '04',
+                      month: 'Sep 2023',
+                      household: 'House #33 (Ali)',
+                      amount: '₹500',
+                    ),
+                    const TransactionItem(
+                      sNo: '05',
+                      month: 'Aug 2023',
+                      household: 'House #99 (Yusuf)',
+                      amount: '₹100',
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 80), // Space for FAB
+            // Space for FAB removed as requested
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: const Color(0xFF00E676),
-        child: const Icon(Icons.add, color: Colors.black),
-      ),
+      // floatingActionButton removed
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 1, // Dashboard selected
+        currentIndex: _currentIndex,
+        onTap: _onItemTapped,
         selectedItemColor: Colors.green,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(
-              Icons.receipt_long,
-            ), // Closest to 'Reports' icon in image
-            label: 'Reports',
+            icon: Icon(Icons.table_chart),
+            label: 'Table',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.share), label: 'Share'),
+          BottomNavigationBarItem(icon: Icon(Icons.print), label: 'Print'),
         ],
       ),
     );
@@ -463,23 +537,30 @@ class TransactionItem extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 40,
+            width: 50,
             child: Text(
               sNo,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
           SizedBox(
-            width: 80,
+            width: 100,
             child: Text(month, style: const TextStyle(color: Colors.grey)),
           ),
-          Expanded(
+          SizedBox(
+            width: 200,
             child: Text(
               household,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
-          Text(amount, style: const TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(
+            width: 100,
+            child: Text(
+              amount,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );
