@@ -26,6 +26,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int _titleIndex = 0;
   final List<String> _titles = ['Masjid Noor Bathar', 'مسجد نور بٹھار'];
+  final List<Map<String, String>> _prayerTimes = [
+    {'en': 'Fajr', 'ur': 'فجر', 'time': '05:30 AM'},
+    {'en': 'Dhuhr', 'ur': 'ظہر', 'time': '01:30 PM'},
+    {'en': 'Asr', 'ur': 'عصر', 'time': '04:45 PM'},
+    {'en': 'Maghrib', 'ur': 'مغرب', 'time': '06:15 PM'},
+    {'en': 'Isha', 'ur': 'عشاء', 'time': '08:00 PM'},
+  ];
   Timer? _titleTimer;
 
   @override
@@ -385,6 +392,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
 
             const SizedBox(height: 24),
+
+            // Prayer Times Section
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Prayer Times',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ..._prayerTimes.map((prayer) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            prayer[_titleIndex == 0 ? 'en' : 'ur']!,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            prayer['time']!,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
 
             // Search Bar Removed
 
