@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
-import 'admin_login_screen.dart';
-import 'update_manager.dart';
+import 'weather_service.dart';
+import 'transactions_screen.dart';
 import 'update_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -14,7 +14,14 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _tableKey = GlobalKey();
+  final WeatherService _weatherService = WeatherService();
+  Map<String, dynamic>? _weatherData;
+  bool _isLoadingWeather = true;
+  String _currentTime = '';
+  String _currentDate = '';
+  String _currentDay = '';
+  Timer? _timeTimer;
+
   int _currentIndex = 0;
 
   int _titleIndex = 0;
@@ -25,10 +32,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _startTitleTimer();
+    _fetchWeather();
+    _updateTime();
+    _timeTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) _updateTime();
+    });
     // Check for updates after the frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateManager(context).checkForUpdates();
     });
+  }
+
+  void _updateTime() {
+    // Current UTC time + 5 hours 30 minutes for IST
+    final now = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+    final weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    final int hour = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
+    final String period = now.hour >= 12 ? 'PM' : 'AM';
+
+    setState(() {
+      _currentTime = '${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} $period';
+      _currentDate = '${months[now.month - 1]} ${now.day}, ${now.year}';
+      _currentDay = weekDays[now.weekday - 1];
+    });
+  }
+
+  Future<void> _fetchWeather() async {
+    try {
+      final data = await _weatherService.fetchWeather('34.126631237568205,74.22824381004901'); 
+      if (mounted) {
+        setState(() {
+          _weatherData = data;
+          _isLoadingWeather = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingWeather = false;
+        });
+        print('Error fetching weather: $e');
+      }
+    }
   }
 
   void _startTitleTimer() {
@@ -45,26 +92,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _currentIndex = index;
     });
-    if (index == 0) {
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-    } else if (index == 1) {
-      if (_tableKey.currentContext != null) {
-        Scrollable.ensureVisible(
-          _tableKey.currentContext!,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
-    }
   }
 
   @override
   void dispose() {
     _titleTimer?.cancel();
+    _timeTimer?.cancel();
     super.dispose();
   }
 
@@ -73,6 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA), // Light grey background
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: AnimatedSwitcher(
@@ -110,32 +144,155 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdminLoginScreen(),
-                  ),
-                );
-              },
-              child: CircleAvatar(
-                backgroundColor: Colors.grey[200],
-                child: const Icon(Icons.person, color: Colors.black),
-              ),
-            ),
-          ),
-        ],
+
       ),
-      body: SingleChildScrollView(
+      body: _currentIndex == 0
+          ? SingleChildScrollView(
         controller: _scrollController,
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Weather Widget
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    if (_isLoadingWeather)
+                      const Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Center(
+                            child: CircularProgressIndicator(color: Colors.white)),
+                      )
+                    else if (_weatherData != null)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_weatherData!['location']?['name'] ?? _weatherData!['city'] ?? "Weather"}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${_weatherData!['current']?['temp_c'] ?? _weatherData!['temperature'] ?? "--"}°C',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                '${_weatherData!['current']?['condition']?['text'] ?? _weatherData!['weather'] ?? "--"}',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Icon(
+                                Icons.cloud,
+                                color: Colors.white,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Humidity: ${_weatherData!['current']?['humidity'] ?? _weatherData!['humidity'] ?? "--"}%',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else
+                      const Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Center(
+                          child: Text(
+                            "Weather Unavailable",
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        ),
+                      ),
+
+                          const SizedBox(height: 16),
+                          Container(
+                            height: 1,
+                            color: Colors.white24,
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _currentTime,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const Text(
+                                    'IST',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    _currentDay,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    _currentDate,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                  ),
+
             // Top Stats Grid
             const Row(
               children: [
@@ -231,164 +388,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // Search Bar Removed
 
-            // Filter Options
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Filter by Month'),
-                        Icon(Icons.arrow_drop_down, color: Colors.grey),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Filter by Household'),
-                        Icon(Icons.arrow_drop_down, color: Colors.grey),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Transactions Table
-            Container(
-              key: _tableKey,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
-                        ),
-                      ),
-                      child: const Row(
-                        children: [
-                          SizedBox(
-                            width: 50,
-                            child: Text(
-                              'S.No',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              'Month',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 200,
-                            child: Text(
-                              'Household',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              'Salary',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // List Items
-                    const TransactionItem(
-                      sNo: '01',
-                      month: 'Oct 2023',
-                      household: 'House #42 (Ahmed)',
-                      amount: '₹500',
-                    ),
-                    const TransactionItem(
-                      sNo: '02',
-                      month: 'Oct 2023',
-                      household: 'House #15 (Rahman)',
-                      amount: '₹250',
-                    ),
-                    const TransactionItem(
-                      sNo: '03',
-                      month: 'Sep 2023',
-                      household: 'House #08 (Khan)',
-                      amount: '₹100',
-                    ),
-                    const TransactionItem(
-                      sNo: '04',
-                      month: 'Sep 2023',
-                      household: 'House #33 (Ali)',
-                      amount: '₹500',
-                    ),
-                    const TransactionItem(
-                      sNo: '05',
-                      month: 'Aug 2023',
-                      household: 'House #99 (Yusuf)',
-                      amount: '₹100',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Space for FAB removed as requested
           ],
         ),
-      ),
+      )
+          : _currentIndex == 1
+              ? const TransactionsScreen()
+              : Center(child: Text('Screen ${_currentIndex + 1}')),
       // floatingActionButton removed
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -516,53 +521,5 @@ class StatCard extends StatelessWidget {
   }
 }
 
-class TransactionItem extends StatelessWidget {
-  final String sNo;
-  final String month;
-  final String household;
-  final String amount;
 
-  const TransactionItem({
-    super.key,
-    required this.sNo,
-    required this.month,
-    required this.household,
-    required this.amount,
-  });
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 50,
-            child: Text(
-              sNo,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          SizedBox(
-            width: 100,
-            child: Text(month, style: const TextStyle(color: Colors.grey)),
-          ),
-          SizedBox(
-            width: 200,
-            child: Text(
-              household,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          SizedBox(
-            width: 100,
-            child: Text(
-              amount,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
